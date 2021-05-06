@@ -27,11 +27,6 @@ import (
 	"mosn.io/pkg/utils"
 )
 
-var (
-	initReasonReconnect    = "Reconnect"
-	initReasonFirstConnect = "FirstConnect"
-)
-
 // types.StreamEventListener
 // types.ConnectionEventListener
 // types.StreamConnectionEventListener
@@ -102,7 +97,7 @@ func (ac *activeClient) reconnect(event api.ConnectionEvent) {
 		ac.pool.connectingMux.Lock()
 		defer ac.pool.connectingMux.Unlock()
 
-		ac.initConnectionLocked(initReasonReconnect)
+		ac.initConnectionLocked(string(event))
 
 	}, func(r interface{}) {
 		log.DefaultLogger.Errorf("[connpool] panic while reconnect, %v, connData: %v, event : %v, host : %v",
@@ -123,27 +118,27 @@ func (ac *activeClient) initConnectionLocked(initReason string) {
 	// build new conn
 	// must create this new conn, the same conn can only be connected once
 	createConnData := ac.pool.Host().CreateConnection(context.Background())
-
 	createConnData.Connection.AddConnectionEventListener(ac)
 
-	if ac.pool.connectionEventListenerCreator != nil {
-		cels := ac.pool.connectionEventListenerCreator()
-		for _, l := range cels {
-			createConnData.Connection.AddConnectionEventListener(l)
-		}
-	}
-	// atomic store, avoid partial write
-	ac.connData.Store(&createConnData)
 	// connect the new connection
 	err := createConnData.Connection.Connect()
 
 	if err != nil {
+		if ac.getConnData() == nil {
+			// the first time
+			// atomic store, avoid partial write
+			ac.connData.Store(&createConnData)
+		}
+
 		if log.DefaultLogger.GetLogLevel() >= log.WARN {
 			log.DefaultLogger.Warnf("[connpool] connect failed %v times, host: %v, connData: %v, init reason: %v",
 				ac.connectTryTimes, ac.pool.Host().AddressString(), ac.connData, initReason)
 		}
 		return
 	}
+
+	// atomic store, avoid partial write
+	ac.connData.Store(&createConnData)
 
 	if log.DefaultLogger.GetLogLevel() >= log.INFO {
 		log.DefaultLogger.Infof("[connpool] connect succeed after %v tries, host: %v, connData: %v, init reason: %v",
