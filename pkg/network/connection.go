@@ -114,6 +114,12 @@ type connection struct {
 	}
 }
 
+func (conn *connection) OnConnectionEvent(event api.ConnectionEvent) {
+	for _, listener := range conn.connCallbacks {
+		listener.OnEvent(event)
+	}
+}
+
 func (conn *connection) GetConnectionEventListener() []api.ConnectionEventListener {
 	return conn.connCallbacks
 }
@@ -220,9 +226,8 @@ func (c *connection) attachEventLoop(lctx context.Context) {
 
 	// create a new timer and bind it to connection
 	c.poll.readTimeoutTimer = time.AfterFunc(buffer.ConnReadTimeout, func() {
-		for _, cb := range c.connCallbacks {
-			cb.OnEvent(api.OnReadTimeout) // run read timeout callback, for keep alive if configured
-		}
+		// run read timeout callback, for keep alive if configured
+		c.OnConnectionEvent(api.OnReadTimeout)
 
 		c.poll.readBufferMux.Lock()
 		defer c.poll.readBufferMux.Unlock()
@@ -916,9 +921,7 @@ func (c *connection) Close(ccType api.ConnectionCloseType, eventType api.Connect
 	c.updateReadBufStats(0, 0)
 	c.updateWriteBuffStats(0, 0)
 
-	for _, cb := range c.connCallbacks {
-		cb.OnEvent(eventType)
-	}
+	c.OnConnectionEvent(eventType)
 
 	return nil
 }
