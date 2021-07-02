@@ -343,7 +343,6 @@ func (m *Mosn) Close() {
 
 }
 
-
 func (m *Mosn) GetServer() []server.Server {
 	return m.servers
 }
