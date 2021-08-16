@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - master
+      - runci
   pull_request:
 jobs:
   golangci-lint:
